@@ -17,6 +17,7 @@ extern "C" {
 #define CC1101_PARTNUM  0x30
 #define CC1101_VERSION  0x31
 #define CC1101_MARCSTATE 0x35
+#define CC1101_RSSI     0x34
 #define CC1101_RXBYTES  0x3B
 #define CC1101_PATABLE  0x3E
 #define CC1101_FIFO     0x3F

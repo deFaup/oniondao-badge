@@ -460,6 +460,22 @@ static int luaOnionSubghzEnd(lua_State* L) {
     return 1;
 }
 
+static int luaOnionSubghzRssi(lua_State* L) {
+    if (g_activeModule != MODULE_SUBGHZ) {
+        lua_pushnil(L);
+        lua_pushstring(L, "subghz not started");
+        return 2;
+    }
+    cc1101Strobe(CC1101_SIDLE);
+    cc1101Strobe(CC1101_SFRX);
+    cc1101Strobe(CC1101_SRX);
+    delay(2);
+    uint8_t rssiRaw = cc1101ReadStatus(CC1101_RSSI);
+    int rssiDbm = (rssiRaw >= 128 ? (rssiRaw - 256) : rssiRaw) / 2 - 74;
+    lua_pushinteger(L, rssiDbm);
+    return 1;
+}
+
 static int luaOnionSoundSpeakerBegin(lua_State* L) {
     int opt = lua_istable(L, 1) ? 1 : 0;
     const ModuleVariantPins& v = resolveModuleVariant();
@@ -1697,6 +1713,8 @@ void registerOnionLua(lua_State* L) {
     lua_setfield(L, -2, "subghz_info");
     lua_pushcfunction(L, luaOnionSubghzEnd);
     lua_setfield(L, -2, "subghz_end");
+    lua_pushcfunction(L, luaOnionSubghzRssi);
+    lua_setfield(L, -2, "subghz_rssi");
     lua_pushcfunction(L, luaOnionSoundSpeakerBegin);
     lua_setfield(L, -2, "sound_speaker_begin");
     lua_pushcfunction(L, luaOnionSoundPlayTone);

@@ -254,6 +254,10 @@ local function run_quick_test()
         onion.log(tx_err or "transmit failed")
     end
 
+    -- Read raw RSSI (noise floor)
+    local rssi = onion.subghz_rssi()
+    onion.log("RSSI (noise floor): " .. tostring(rssi) .. " dBm")
+
     onion.sleep(200)
     local msg = onion.subghz_receive(3000)
     onion.subghz_end()
@@ -262,13 +266,15 @@ local function run_quick_test()
         onion.display_lines({
             "SubGHz RX",
             "len=" .. msg.len .. " rssi=" .. msg.rssi_dbm .. "dBm",
+            "noise=" .. tostring(rssi) .. "dBm",
             msg.message
-        }, 8, 28, 20, { font = "bold", clear = true })
+        }, 8, 22, 18, { font = "bold", clear = true })
         onion.log("RX len=" .. msg.len .. " rssi=" .. msg.rssi_dbm)
     else
         onion.display_lines({
             "SubGHz TX done",
             sent and "Sent ok" or (tx_err or "TX fail"),
+            "RSSI: " .. tostring(rssi) .. " dBm",
             "No RX (expected)"
         }, 8, 28, 20, { font = "bold", clear = true })
         onion.log("No RX (normal if solo)")
@@ -375,19 +381,31 @@ local function run_listen()
             return
         end
 
-        local msg = onion.subghz_receive(1000)
+        -- Always read raw RSSI to show signal strength
+        local rssi = onion.subghz_rssi()
+
+        local msg = onion.subghz_receive(500)
         if msg then
             count = count + 1
             onion.log("RX #" .. count .. " len=" .. msg.len .. " rssi=" .. msg.rssi_dbm)
             onion.display_lines({
-                "RX #" .. count,
-                "RSSI: " .. msg.rssi_dbm .. " dBm",
+                "RX #" .. count .. "  RSSI:" .. rssi .. "dBm",
+                "Pkt RSSI: " .. msg.rssi_dbm .. " dBm",
                 mod:upper() .. " " .. (info.frequency or "?") .. " MHz",
                 "Len: " .. msg.len .. " bytes",
                 "Data: " .. (msg.message or ""):sub(1, 20),
                 "",
                 "CANCEL to stop"
-            }, 8, 18, 16, { font = "bold", clear = true })
+            }, 8, 16, 15, { font = "bold", clear = true })
+        else
+            onion.display_lines({
+                "Listening...",
+                "RSSI: " .. rssi .. " dBm",
+                mod:upper() .. " " .. (info.frequency or "?") .. " MHz",
+                "Packets: " .. count,
+                "",
+                "CANCEL to stop"
+            }, 8, 20, 16, { font = "bold", clear = true })
         end
     end
 end
