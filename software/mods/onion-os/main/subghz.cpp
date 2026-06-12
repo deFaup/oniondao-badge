@@ -15,7 +15,10 @@ static int g_subghzGdo0 = -1;
 
 const ModuleVariantPins& resolveModuleVariant() {
     for (const ModuleVariantPins& v : kModuleVariants) {
-        if (g_config.moduleVariant.equalsIgnoreCase(v.name)) return v;
+        if (g_config.moduleVariant.equalsIgnoreCase(v.name)) {
+            Serial.printf("Detected module with variant %s\n", v.name);
+            return v;
+        }
     }
     return kModuleVariants[0];
 }
