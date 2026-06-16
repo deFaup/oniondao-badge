@@ -472,6 +472,7 @@ static int luaOnionSubghzRssi(lua_State* L) {
     delay(2);
     uint8_t rssiRaw = cc1101ReadStatus(CC1101_RSSI);
     int rssiDbm = (rssiRaw >= 128 ? (rssiRaw - 256) : rssiRaw) / 2 - 74;
+    Serial.printf("[subghz_rssi] raw=0x%02X, dBm=%d\n", rssiRaw, rssiDbm);
     lua_pushinteger(L, rssiDbm);
     return 1;
 }

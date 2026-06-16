@@ -223,6 +223,8 @@ int cc1101Receive(uint8_t* out, size_t maxLen, int* rssiRaw, uint32_t timeoutMs)
             uint8_t status[2];
             cc1101ReadBurst(CC1101_FIFO, status, 2);
             if (rssiRaw) *rssiRaw = status[0];
+            int rssiDbm = (status[0] >= 128 ? (status[0] - 256) : status[0]) / 2 - 74;
+            Serial.printf("[cc1101Receive] got packet: len=%d rssi=%d dBm\n", len, rssiDbm);
             cc1101Strobe(CC1101_SIDLE);
             cc1101Strobe(CC1101_SFRX);
             return (int)len;

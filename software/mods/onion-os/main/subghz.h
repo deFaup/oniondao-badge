@@ -6,19 +6,23 @@ extern "C" {
 #include "lua.h"
 }
 
-// CC1101 register/strobe defines
-#define CC1101_SRES     0x30
-#define CC1101_SRX      0x34
-#define CC1101_STX      0x35
-#define CC1101_SIDLE    0x36
-#define CC1101_SPWD     0x39
-#define CC1101_SFRX     0x3A
-#define CC1101_SFTX     0x3B
+// CC1101 strobe commands (S = strobe prefix)
+#define CC1101_SRES     0x30  // Strobe Reset — chip reset
+#define CC1101_SRX      0x34  // Strobe RX — enable receive mode
+#define CC1101_STX      0x35  // Strobe TX — enable transmit mode
+#define CC1101_SIDLE    0x36  // Strobe Idle — exit RX/TX, idle state
+#define CC1101_SPWD     0x39  // Strobe Power-down — enter sleep
+#define CC1101_SFRX     0x3A  // Strobe Flush RX — clear RX FIFO
+#define CC1101_SFTX     0x3B  // Strobe Flush TX — clear TX FIFO
+
+// CC1101 status registers (read via 0xC0 | addr)
 #define CC1101_PARTNUM  0x30
 #define CC1101_VERSION  0x31
 #define CC1101_MARCSTATE 0x35
-#define CC1101_RSSI     0x34
+#define CC1101_RSSI     0x34  // received signal strength indicator
 #define CC1101_RXBYTES  0x3B
+
+// CC1101 other registers
 #define CC1101_PATABLE  0x3E
 #define CC1101_FIFO     0x3F
 

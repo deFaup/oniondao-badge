@@ -340,6 +340,113 @@ local function run_tx_wave()
     onion.sleep(3000)
 end
 
+-- ── Sweep picker ────────────────────────────────────────────────────────
+-- First screen: Auto (±1 MHz), Custom..., or Off.
+-- Custom: pick from ±0.5 / ±1 / ±2 / ±5 MHz.
+-- Returns sweep range in MHz (e.g. 1.0), or 0 for off, or nil if cancelled.
+
+local SWEEP_PRESETS = { 0.5, 1.0, 2.0, 5.0 }
+
+local function pick_sweep()
+    local mode = 1  -- 1=auto, 2=custom, 3=off
+    local lb = {}
+
+    local function draw_choose()
+        local labels = {
+            "> Auto (+-1 MHz)",
+            "> Custom...",
+            "> Off",
+        }
+        local lines = { "Sweep Range:" }
+        for i, label in ipairs(labels) do
+            if i == mode then
+                lines[#lines + 1] = label
+            else
+                lines[#lines + 1] = " " .. label:sub(3)
+            end
+        end
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "SEL=ok CANCEL=back"
+        onion.display_lines(lines, 8, 20, 17, { font = "bold", clear = true })
+    end
+
+    wait_for_release()
+    draw_choose()
+
+    while true do
+        local buttons = onion.buttons()
+
+        if buttons.cancel then
+            wait_for_release()
+            return nil
+        end
+
+        if buttons.up and not lb.up then
+            mode = mode - 1
+            if mode < 1 then mode = 3 end
+            draw_choose()
+        elseif buttons.down and not lb.down then
+            mode = mode + 1
+            if mode > 3 then mode = 1 end
+            draw_choose()
+        elseif buttons.select and not lb.select then
+            wait_for_release()
+            if mode == 1 then return -1 end   -- auto
+            if mode == 3 then return 0 end    -- off
+            break  -- custom
+        end
+
+        lb = buttons
+        onion.sleep(80)
+    end
+
+    -- Custom preset picker
+    local preset = 1
+    lb = {}
+
+    local function draw_presets()
+        local lines = { "Sweep Range:" }
+        for i, v in ipairs(SWEEP_PRESETS) do
+            local label = string.format("+-%.1f MHz", v)
+            if i == preset then
+                lines[#lines + 1] = "> " .. label
+            else
+                lines[#lines + 1] = "  " .. label
+            end
+        end
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "SEL=ok CANCEL=back"
+        onion.display_lines(lines, 8, 20, 17, { font = "bold", clear = true })
+    end
+
+    draw_presets()
+
+    while true do
+        local buttons = onion.buttons()
+
+        if buttons.cancel then
+            wait_for_release()
+            return nil
+        end
+
+        if buttons.up and not lb.up then
+            preset = preset - 1
+            if preset < 1 then preset = #SWEEP_PRESETS end
+            draw_presets()
+        elseif buttons.down and not lb.down then
+            preset = preset + 1
+            if preset > #SWEEP_PRESETS then preset = 1 end
+            draw_presets()
+        elseif buttons.select and not lb.select then
+            wait_for_release()
+            return SWEEP_PRESETS[preset]
+        end
+
+        lb = buttons
+        onion.sleep(80)
+    end
+end
+
 -- ── Option 3: Listen for signals ────────────────────────────────────────
 
 local function run_listen()
@@ -349,9 +456,34 @@ local function run_listen()
     local freq = pick_frequency()
     if not freq then return end
 
+    local sweep_range = pick_sweep()
+    if sweep_range == nil then return end
+
+    -- Build frequency table
+    local STEP = 0.1  -- 100 kHz steps
+    local DWELL = 200 -- ms per step
+    local freqs = {}
+
+    if sweep_range == 0 then
+        -- Sweep off: single frequency
+        freqs[1] = freq
+    else
+        local half = sweep_range == -1 and 1.0 or sweep_range
+        local f = freq - half
+        while f <= freq + half + 0.001 do
+            freqs[#freqs + 1] = math.floor(f * 100 + 0.5) / 100
+            f = f + STEP
+        end
+    end
+
+    local sweep_label = "Off"
+    if sweep_range == -1 then sweep_label = "Auto +-1"
+    elseif sweep_range > 0 then sweep_label = string.format("+-%.1f", sweep_range) end
+
     onion.display_lines({
         "Initializing...",
-        mod:upper() .. " @ " .. string.format("%.2f", freq) .. " MHz"
+        mod:upper() .. " @ " .. string.format("%.2f", freq) .. " MHz",
+        "Sweep: " .. sweep_label
     }, 8, 32, 22, { font = "bold", clear = true })
 
     local ok, err = onion.subghz_begin({ freq = freq, modulation = mod })
@@ -364,14 +496,8 @@ local function run_listen()
         return
     end
 
-    local info = onion.subghz_info()
-    onion.display_lines({
-        "Listening...",
-        mod:upper() .. " " .. (info.frequency or "?") .. " MHz",
-        "CANCEL to stop"
-    }, 8, 22, 18, { font = "bold", clear = true })
-
     local count = 0
+    local step = 1
 
     while true do
         local buttons = onion.buttons()
@@ -381,17 +507,23 @@ local function run_listen()
             return
         end
 
-        -- Always read raw RSSI to show signal strength
+        -- Tune to current frequency in sweep
+        local cur_freq = freqs[step]
+        onion.subghz_set_frequency(cur_freq)
+
+        -- Read raw RSSI
         local rssi = onion.subghz_rssi()
 
-        local msg = onion.subghz_receive(500)
+        -- Short receive window
+        local msg = onion.subghz_receive(DWELL)
+
         if msg then
             count = count + 1
-            onion.log("RX #" .. count .. " len=" .. msg.len .. " rssi=" .. msg.rssi_dbm)
+            onion.log("RX #" .. count .. " @ " .. cur_freq .. " len=" .. msg.len .. " rssi=" .. msg.rssi_dbm)
             onion.display_lines({
-                "RX #" .. count .. "  RSSI:" .. rssi .. "dBm",
-                "Pkt RSSI: " .. msg.rssi_dbm .. " dBm",
-                mod:upper() .. " " .. (info.frequency or "?") .. " MHz",
+                "RX #" .. count .. "  " .. string.format("%.2f", cur_freq),
+                "RSSI:" .. rssi .. " Pkt:" .. msg.rssi_dbm .. "dBm",
+                mod:upper() .. " sweep:" .. sweep_label,
                 "Len: " .. msg.len .. " bytes",
                 "Data: " .. (msg.message or ""):sub(1, 20),
                 "",
@@ -399,14 +531,18 @@ local function run_listen()
             }, 8, 16, 15, { font = "bold", clear = true })
         else
             onion.display_lines({
-                "Listening...",
+                "Listening " .. string.format("%.2f", cur_freq),
                 "RSSI: " .. rssi .. " dBm",
-                mod:upper() .. " " .. (info.frequency or "?") .. " MHz",
-                "Packets: " .. count,
+                mod:upper() .. " sweep:" .. sweep_label,
+                "Packets: " .. count .. "  Step:" .. step .. "/" .. #freqs,
                 "",
                 "CANCEL to stop"
             }, 8, 20, 16, { font = "bold", clear = true })
         end
+
+        -- Advance to next sweep step
+        step = step + 1
+        if step > #freqs then step = 1 end
     end
 end
 
